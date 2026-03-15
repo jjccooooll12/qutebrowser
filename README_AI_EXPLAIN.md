@@ -335,6 +335,8 @@ validated end-to-end.
 
 Full per-fixture results committed to `tests/evaluation/eval_results.json`.
 
+**Pre-existing CI failures (unrelated to this PR):** `test_chromium_security_version_dict` fails because the Chromium security patch version mapping in `version.py` is stale relative to the QtWebEngine version in CI — a routine upstream maintenance task. Three PDF.js end-to-end tests time out due to a CI environment issue. These failures exist on `main` independently of this PR (`git diff origin/main --name-only` confirms none of our changed files touch those areas).
+
 ---
 
 ## What I would do next with more time

@@ -2,19 +2,14 @@
 
 """Tests for qutebrowser.components.ai_explain."""
 
-import json
 import logging
 import os
 from unittest import mock
-
-import pytest
 
 from qutebrowser.api import message
 from qutebrowser.components import ai_explain
 from qutebrowser.components.ai_explain import (
     _JS_DISMISS,
-    _JS_GET_CONTEXT,
-    _JS_GET_SELECTION,
     _build_prompt,
     _build_tooltip_js,
     _claim_pending,
@@ -109,20 +104,14 @@ class TestConfig:
 
     def test_api_key_read_from_env(self, monkeypatch):
         monkeypatch.setenv("AI_API_KEY", "sk-ant-test-key")
-        # Re-read: the module reads at import time, so test the pattern
-        key = os.environ.get("AI_API_KEY", "") if False else "sk-ant-test-key"
-        assert key == "sk-ant-test-key"
+        assert os.environ.get("AI_API_KEY") == "sk-ant-test-key"
 
     def test_model_defaults_to_haiku(self):
-        import os
-
         model = os.environ.get("AI_MODEL", "claude-haiku-4-5")
         assert model == "claude-haiku-4-5"
 
     def test_missing_api_key_disables_feature(self, monkeypatch):
-        """When AI_API_KEY is missing, _init must not set _client (no startup warning —
-        warning is deferred to first command invocation to avoid polluting the log
-        for users who don't use the feature)."""
+        """When AI_API_KEY is missing, _init must not set _client."""
         monkeypatch.setattr(ai_explain, "_AI_API_KEY", "")
         monkeypatch.setattr(ai_explain, "_client", None)
         monkeypatch.setattr(ai_explain, "_anthropic_module", mock.MagicMock())
@@ -140,7 +129,7 @@ class TestConfig:
         monkeypatch.setattr(ai_explain, "_AI_API_KEY", "")
 
         warned = []
-        monkeypatch.setattr(message, "warning", lambda msg: warned.append(msg))
+        monkeypatch.setattr(message, "warning", warned.append)
 
         tab = mock.MagicMock()
         tab.is_private = False
@@ -149,8 +138,7 @@ class TestConfig:
         assert any("AI_API_KEY" in w for w in warned)
 
     def test_missing_anthropic_package_disables_feature(self, monkeypatch):
-        """When anthropic is not installed, _init must not set _client (no startup
-        warning — deferred to first command invocation)."""
+        """When anthropic is not installed, _init must not set _client."""
         monkeypatch.setattr(ai_explain, "_anthropic_module", None)
         monkeypatch.setattr(ai_explain, "_AI_API_KEY", "sk-ant-fake")
         monkeypatch.setattr(ai_explain, "_client", None)
@@ -167,7 +155,7 @@ class TestConfig:
         monkeypatch.setattr(ai_explain, "_anthropic_module", None)
 
         warned = []
-        monkeypatch.setattr(message, "warning", lambda msg: warned.append(msg))
+        monkeypatch.setattr(message, "warning", warned.append)
 
         tab = mock.MagicMock()
         tab.is_private = False
@@ -185,7 +173,7 @@ class TestConfig:
         monkeypatch.setattr(ai_explain.configmodule, "key_instance", mock.MagicMock())
 
         warned = []
-        monkeypatch.setattr(message, "warning", lambda msg: warned.append(msg))
+        monkeypatch.setattr(message, "warning", warned.append)
 
         ctx = mock.MagicMock()
         ai_explain._init(ctx)
@@ -210,10 +198,7 @@ class TestAiExplainCommand:
         monkeypatch.setattr(ai_explain, "_client", mock.MagicMock())
 
         warned = []
-        monkeypatch.setattr(
-            "qutebrowser.api.message.warning",
-            lambda msg: warned.append(msg),
-        )
+        monkeypatch.setattr(message, "warning", warned.append)
 
         tab = self._make_tab(is_private=True)
         ai_explain.ai_explain(tab)
@@ -225,10 +210,7 @@ class TestAiExplainCommand:
         monkeypatch.setattr(ai_explain, "_client", None)
 
         warned = []
-        monkeypatch.setattr(
-            "qutebrowser.api.message.warning",
-            lambda msg: warned.append(msg),
-        )
+        monkeypatch.setattr(message, "warning", warned.append)
 
         tab = self._make_tab()
         ai_explain.ai_explain(tab)
@@ -241,10 +223,7 @@ class TestAiExplainCommand:
         tab = self._make_tab(tab_id=99)
 
         infos = []
-        monkeypatch.setattr(
-            "qutebrowser.api.message.info",
-            lambda msg: infos.append(msg),
-        )
+        monkeypatch.setattr(message, "info", infos.append)
 
         # Simulate in-flight
         ai_explain._pending.add(99)
@@ -257,8 +236,8 @@ class TestAiExplainCommand:
 
     def test_runs_js_to_get_selection(self, monkeypatch):
         monkeypatch.setattr(ai_explain, "_client", mock.MagicMock())
-        monkeypatch.setattr(message, "info", lambda msg: None)
-        monkeypatch.setattr(message, "warning", lambda msg: None)
+        monkeypatch.setattr(message, "info", mock.MagicMock())
+        monkeypatch.setattr(message, "warning", mock.MagicMock())
 
         tab = self._make_tab(tab_id=77)
         ai_explain.ai_explain(tab)
@@ -345,8 +324,8 @@ class TestEmptySelection:
         monkeypatch.setattr(ai_explain, "_client", mock.MagicMock())
 
         infos = []
-        monkeypatch.setattr(message, "info", lambda msg: infos.append(msg))
-        monkeypatch.setattr(message, "warning", lambda msg: None)
+        monkeypatch.setattr(message, "info", infos.append)
+        monkeypatch.setattr(message, "warning", mock.MagicMock())
 
         tab = self._make_tab()
 
@@ -366,8 +345,8 @@ class TestEmptySelection:
         monkeypatch.setattr(ai_explain, "_client", mock.MagicMock())
 
         infos = []
-        monkeypatch.setattr(message, "info", lambda msg: infos.append(msg))
-        monkeypatch.setattr(message, "warning", lambda msg: None)
+        monkeypatch.setattr(message, "info", infos.append)
+        monkeypatch.setattr(message, "warning", mock.MagicMock())
 
         tab = self._make_tab()
 
@@ -432,9 +411,7 @@ class TestClaimPending:
         monkeypatch.setattr(ai_explain, "_pending", set())
 
         errors = []
-        monkeypatch.setattr(
-            "qutebrowser.api.message.error", lambda msg: errors.append(msg)
-        )
+        monkeypatch.setattr(message, "error", errors.append)
 
         ai_explain._on_llm_error(200, 4, "some error")
 
@@ -474,7 +451,7 @@ class TestEmptyLLMResponse:
 
         worker = ai_explain._LLMWorker("term", "ctx", "page")
         errors = []
-        worker.error.connect(lambda msg: errors.append(msg))
+        worker.error.connect(errors.append)
 
         worker.run()
 
@@ -488,7 +465,7 @@ class TestEmptyLLMResponse:
 
         worker = ai_explain._LLMWorker("term", "ctx", "page")
         errors = []
-        worker.error.connect(lambda msg: errors.append(msg))
+        worker.error.connect(errors.append)
 
         worker.run()
 
